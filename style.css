@@ -609,3 +609,8 @@ textarea { resize: vertical; min-height: 68px; }
   .card { box-shadow: none; border: none; }
   .planning-columns { grid-template-columns: repeat(3, 1fr); }
 }
+
+.reset-success {
+  color: #047857 !important;
+  font-weight: 900;
+}

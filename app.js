@@ -30,6 +30,7 @@
   let participantsByEvent = {};
   let mealsByEvent = {};
   let initialized = false;
+  let isPasswordRecoveryMode = false;
 
   const byId = (id) => document.getElementById(id);
 
@@ -92,6 +93,67 @@
     return places.find(p => p.id === id)?.name || '';
   }
 
+
+  function hasRecoveryTokenInUrl() {
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const query = new URLSearchParams(window.location.search);
+
+    return (
+      hash.get('type') === 'recovery' ||
+      query.get('type') === 'recovery' ||
+      hash.has('access_token') ||
+      window.location.hash.includes('access_token=')
+    );
+  }
+
+  function showResetPasswordScreen() {
+    isPasswordRecoveryMode = true;
+    byId('loginScreen').style.display = 'none';
+    byId('app').style.display = 'none';
+    byId('resetPasswordScreen').style.display = 'grid';
+  }
+
+  async function updatePasswordFromRecovery() {
+    const password = byId('newPasswordReset').value;
+    const confirm = byId('confirmPasswordReset').value;
+    const errorBox = byId('resetPasswordError');
+
+    errorBox.className = 'login-error';
+    errorBox.textContent = '';
+
+    if (!password || password.length < 8) {
+      errorBox.textContent = 'Le mot de passe doit contenir au moins 8 caractères.';
+      return;
+    }
+
+    if (password !== confirm) {
+      errorBox.textContent = 'Les deux mots de passe ne correspondent pas.';
+      return;
+    }
+
+    const { error } = await db.auth.updateUser({ password });
+
+    if (error) {
+      errorBox.textContent = error.message || 'Impossible de modifier le mot de passe.';
+      return;
+    }
+
+    errorBox.className = 'login-error reset-success';
+    errorBox.textContent = 'Mot de passe mis à jour. Tu peux maintenant te reconnecter.';
+
+    setTimeout(async () => {
+      await db.auth.signOut();
+      window.history.replaceState({}, document.title, window.location.pathname);
+      byId('resetPasswordScreen').style.display = 'none';
+      byId('loginScreen').style.display = 'grid';
+      byId('app').style.display = 'none';
+      byId('loginPassword').value = '';
+      byId('newPasswordReset').value = '';
+      byId('confirmPasswordReset').value = '';
+      isPasswordRecoveryMode = false;
+    }, 1800);
+  }
+
   async function login() {
     byId('loginError').textContent = '';
 
@@ -124,6 +186,11 @@
     if (!data.session?.user) return;
 
     currentUser = data.session.user;
+
+    if (isPasswordRecoveryMode) {
+      return;
+    }
+
     await loadCurrentProfile();
     await showApp();
   }
@@ -766,6 +833,7 @@
 
   function bindEvents() {
     byId('loginButton').addEventListener('click', login);
+    byId('updatePasswordButton').addEventListener('click', updatePasswordFromRecovery);
     byId('loginPassword').addEventListener('keydown', event => {
       if (event.key === 'Enter') login();
     });
@@ -814,6 +882,12 @@
     refreshEventTypeOptions();
     bindEvents();
     runTests();
+
+    if (hasRecoveryTokenInUrl()) {
+      showResetPasswordScreen();
+      return;
+    }
+
     await restoreSession();
   }
 

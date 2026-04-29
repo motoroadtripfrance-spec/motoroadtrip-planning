@@ -36,6 +36,37 @@
     </div>
   </div>
 
+
+  <div id="resetPasswordScreen" class="login-screen" style="display:none;">
+    <div class="login-card premium-login-card">
+      <div class="login-topline">Réinitialisation • Motoroadtrip Pro</div>
+
+      <div class="brand login-brand brand-logo">
+        <img src="logo-motoroadtrip.png" alt="Logo Motoroadtrip" class="logo-motoroadtrip login-logo" />
+        <span>Motoroadtrip</span>
+      </div>
+
+      <h1>Nouveau mot de passe</h1>
+      <p class="login-intro">Choisis un nouveau mot de passe pour ton compte.</p>
+
+      <div class="login-fields">
+        <label for="newPasswordReset">Nouveau mot de passe</label>
+        <input id="newPasswordReset" type="password" placeholder="Nouveau mot de passe" autocomplete="new-password" />
+
+        <label for="confirmPasswordReset">Confirmer le mot de passe</label>
+        <input id="confirmPasswordReset" type="password" placeholder="Confirmer le mot de passe" autocomplete="new-password" />
+      </div>
+
+      <button id="updatePasswordButton" class="btn btn-primary login-main-button" type="button">Mettre à jour le mot de passe</button>
+      <p id="resetPasswordError" class="login-error"></p>
+
+      <div class="login-footer-note">
+        Une fois le mot de passe modifié, tu pourras te reconnecter normalement.
+      </div>
+    </div>
+  </div>
+
+
   <div id="app" style="display:none;">
     <header>
       <div class="brand brand-logo">
@@ -175,7 +206,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js"></script>
+  <script src="config.example.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
