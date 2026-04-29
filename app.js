@@ -56,20 +56,47 @@
       .replace(/^-|-$/g, '');
   }
 
+  function parseLocalDate(dateString) {
+    if (!dateString) return null;
+    const [year, month, day] = String(dateString).split('-').map(Number);
+    if (!year || !month || !day) return null;
+    return new Date(year, month - 1, day, 12, 0, 0, 0);
+  }
+
+  function toLocalDateString(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   function formatDate(dateString) {
     if (!dateString) return '';
-    const d = new Date(dateString + 'T00:00:00');
-    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const d = parseLocalDate(dateString);
+    if (!d) return '';
+
+    const formatted = d.toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
   }
 
   function getDatesBetween(startDate, endDate) {
     if (!startDate || !endDate || endDate < startDate) return [];
+
+    const start = parseLocalDate(startDate);
+    const end = parseLocalDate(endDate);
+    if (!start || !end) return [];
+
     const dates = [];
-    const current = new Date(startDate + 'T00:00:00');
-    const end = new Date(endDate + 'T00:00:00');
+    const current = new Date(start);
 
     while (current <= end) {
-      dates.push(current.toISOString().split('T')[0]);
+      dates.push(toLocalDateString(current));
       current.setDate(current.getDate() + 1);
     }
 
@@ -868,7 +895,12 @@
   }
 
   function runTests() {
-    console.assert(getDatesBetween('2026-05-01', '2026-05-03').length === 3, 'getDatesBetween doit retourner 3 jours.');
+    const mayDates = getDatesBetween('2026-05-01', '2026-05-03');
+    console.assert(mayDates.length === 3, 'getDatesBetween doit retourner 3 jours.');
+    console.assert(mayDates[0] === '2026-05-01', 'Le premier repas doit être le 01/05/2026.');
+    console.assert(mayDates[2] === '2026-05-03', 'Le dernier repas doit être le 03/05/2026.');
+    console.assert(!mayDates.includes('2026-04-30'), 'Le 30/04 ne doit jamais apparaître.');
+    console.assert(!mayDates.includes('2026-05-04'), 'Le 04/05 ne doit jamais apparaître.');
     console.assert(defaultEventTypes.includes('Quad'), 'Quad doit être présent.');
     console.assert(defaultEventTypes.includes('Enduro senior'), 'Enduro senior doit être présent.');
     console.assert(defaultEventTypes.includes('Sortie pépère'), 'Sortie pépère doit être présent.');
