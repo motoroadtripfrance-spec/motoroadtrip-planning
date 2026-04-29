@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Planning Guides Motoroadtrip Pro</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card premium-login-card">
+      <div class="login-topline">Planning guides • Motoroadtrip Pro</div>
+
+      <div class="brand login-brand brand-logo">
+        <img src="logo-motoroadtrip.png" alt="Logo Motoroadtrip" class="logo-motoroadtrip login-logo" />
+        <span>Motoroadtrip</span>
+      </div>
+
+      <h1>Accès planning guides</h1>
+      <p class="login-intro">Connexion sécurisée via Supabase.</p>
+
+      <div class="login-fields">
+        <label for="loginEmail">Email</label>
+        <input id="loginEmail" type="email" placeholder="email@exemple.fr" autocomplete="username" />
+
+        <label for="loginPassword">Mot de passe</label>
+        <input id="loginPassword" type="password" placeholder="Mot de passe" autocomplete="current-password" />
+      </div>
+
+      <button id="loginButton" class="btn btn-primary login-main-button" type="button">Se connecter</button>
+      <p id="loginError" class="login-error"></p>
+
+      <div class="login-footer-note">
+        🏍️ Données partagées, accès sécurisé, planning centralisé.
+      </div>
+    </div>
+  </div>
+
+  <div id="app" style="display:none;">
+    <header>
+      <div class="brand brand-logo">
+        <img src="logo-motoroadtrip.png" alt="Logo Motoroadtrip" class="logo-motoroadtrip" />
+        <span>Motoroadtrip</span>
+      </div>
+      <h1>Planning des guides</h1>
+      <p>Organisation chronologique des sorties, repas, couchages et participants</p>
+      <div class="user-bar">
+        <span class="user-pill" id="connectedUserLabel"></span>
+        <button id="logoutButton" class="btn btn-secondary btn-small" type="button">Déconnexion</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="grid" id="mainGrid">
+        <section class="card form-card" id="formCard">
+          <h2 id="formTitle">Créer un événement</h2>
+          <input type="hidden" id="editingId" />
+
+          <div class="row">
+            <div>
+              <label for="startDate">Date de début</label>
+              <input type="date" id="startDate" />
+            </div>
+            <div>
+              <label for="endDate">Date de fin</label>
+              <input type="date" id="endDate" />
+            </div>
+          </div>
+
+          <label for="guide">Guide</label>
+          <select id="guide"></select>
+
+          <label for="eventType">Type d'événement</label>
+          <select id="eventType"></select>
+
+          <label>Restauration par jour</label>
+          <div id="mealPlanning" class="meal-planning"></div>
+          <p class="note">Renseigne le restaurant du midi et du soir pour chaque journée de l'événement.</p>
+
+          <label for="gite">Lieu de couchage / gîte</label>
+          <select id="gite"></select>
+
+          <label>Participants / clients, jusqu'à 14 noms</label>
+          <div class="participant-grid" id="participantInputs"></div>
+          <p class="note">Les participants 13 et 14 sont optionnels.</p>
+
+          <label for="notes">Notes internes</label>
+          <textarea id="notes" placeholder="Exemple : niveau homogène, prévoir repas terroir, attention météo..."></textarea>
+
+          <button id="saveEventButton" class="btn btn-primary" type="button">Enregistrer l'événement</button>
+          <button id="resetFormButton" class="btn btn-secondary full-width" type="button">Réinitialiser</button>
+
+          <div class="management admin-only" id="guideManagement">
+            <div class="section-title"><h2>Guides & accès</h2></div>
+            <p class="note">Créer un guide ici ajoute une colonne planning et un compte de connexion Supabase.</p>
+
+            <div class="account-form">
+              <div>
+                <label for="newGuideName">Nom du guide</label>
+                <input id="newGuideName" placeholder="Exemple : Julien" />
+              </div>
+              <div>
+                <label for="newGuideEmail">Email de connexion</label>
+                <input id="newGuideEmail" type="email" placeholder="julien@email.fr" />
+              </div>
+              <div>
+                <label for="newGuidePassword">Mot de passe initial</label>
+                <input id="newGuidePassword" type="text" placeholder="Mot de passe attribué au guide" />
+              </div>
+              <button id="createGuideAccountButton" class="btn btn-primary" type="button">Créer le guide et son accès</button>
+            </div>
+
+            <div id="accountsList" class="accounts-list"></div>
+          </div>
+
+          <div class="management">
+            <div class="section-title"><h2>Lieux de restauration</h2></div>
+            <div class="inline-add">
+              <input id="newRestaurant" placeholder="Ajouter un restaurant" />
+              <button class="btn btn-secondary btn-small" data-action="add-place" data-kind="restaurant" type="button">Ajouter</button>
+            </div>
+            <div class="chips" id="restaurantChips"></div>
+          </div>
+
+          <div class="management">
+            <div class="section-title"><h2>Gîtes / couchages</h2></div>
+            <div class="inline-add">
+              <input id="newGite" placeholder="Ajouter un gîte" />
+              <button class="btn btn-secondary btn-small" data-action="add-place" data-kind="gite" type="button">Ajouter</button>
+            </div>
+            <div class="chips" id="giteChips"></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="section-title">
+            <h2>Planning général</h2>
+            <div class="toolbar">
+              <button id="printButton" class="btn btn-secondary btn-small" type="button">Imprimer</button>
+              <button id="exportCsvButton" class="btn btn-secondary btn-small" type="button">Export Excel CSV</button>
+            </div>
+          </div>
+
+          <div class="filters">
+            <div>
+              <label for="filterGuide">Filtrer par guide</label>
+              <select id="filterGuide"></select>
+            </div>
+            <div>
+              <label for="filterType">Filtrer par événement</label>
+              <select id="filterType"></select>
+            </div>
+            <div>
+              <label for="filterStart">À partir du</label>
+              <input type="date" id="filterStart" />
+            </div>
+            <div>
+              <label for="filterEnd">Jusqu'au</label>
+              <input type="date" id="filterEnd" />
+            </div>
+          </div>
+
+          <div class="stats">
+            <div class="stat"><strong id="totalEvents">0</strong><span>Événements</span></div>
+            <div class="stat"><strong id="totalParticipants">0</strong><span>Participants</span></div>
+            <div class="stat"><strong id="totalRestaurants">0</strong><span>Restaurants</span></div>
+            <div class="stat"><strong id="totalGites">0</strong><span>Gîtes</span></div>
+          </div>
+
+          <div id="loadingMessage" class="empty">Chargement du planning...</div>
+          <div class="planning-columns" id="planningColumns"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.example.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
