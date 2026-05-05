@@ -22,6 +22,75 @@
     'Sortie pépère'
   ];
 
+  const frenchImportHeaders = [
+    'Date de début',
+    'Date de fin',
+    'Guide',
+    'Type d’événement',
+    'Restaurant jour 1 midi',
+    'Restaurant jour 1 soir',
+    'Restaurant jour 2 midi',
+    'Restaurant jour 2 soir',
+    'Restaurant jour 3 midi',
+    'Restaurant jour 3 soir',
+    'Restaurant jour 4 midi',
+    'Restaurant jour 4 soir',
+    'Restaurant jour 5 midi',
+    'Restaurant jour 5 soir',
+    'Gîte',
+    'Participant 1',
+    'Participant 2',
+    'Participant 3',
+    'Participant 4',
+    'Participant 5',
+    'Participant 6',
+    'Participant 7',
+    'Participant 8',
+    'Participant 9',
+    'Participant 10',
+    'Participant 11',
+    'Participant 12',
+    'Participant 13',
+    'Participant 14',
+    'Notes'
+  ];
+
+  const frenchToTechnicalHeaders = {
+    'Date de début': 'start_date',
+    'Date de fin': 'end_date',
+    'Guide': 'guide',
+    'Type d’événement': 'event_type',
+    'Type d\\'événement': 'event_type',
+    'Restaurant jour 1 midi': 'restaurant_day1_lunch',
+    'Restaurant jour 1 soir': 'restaurant_day1_dinner',
+    'Restaurant jour 2 midi': 'restaurant_day2_lunch',
+    'Restaurant jour 2 soir': 'restaurant_day2_dinner',
+    'Restaurant jour 3 midi': 'restaurant_day3_lunch',
+    'Restaurant jour 3 soir': 'restaurant_day3_dinner',
+    'Restaurant jour 4 midi': 'restaurant_day4_lunch',
+    'Restaurant jour 4 soir': 'restaurant_day4_dinner',
+    'Restaurant jour 5 midi': 'restaurant_day5_lunch',
+    'Restaurant jour 5 soir': 'restaurant_day5_dinner',
+    'Gîte': 'gite',
+    'Gite': 'gite',
+    'Participant 1': 'participant_1',
+    'Participant 2': 'participant_2',
+    'Participant 3': 'participant_3',
+    'Participant 4': 'participant_4',
+    'Participant 5': 'participant_5',
+    'Participant 6': 'participant_6',
+    'Participant 7': 'participant_7',
+    'Participant 8': 'participant_8',
+    'Participant 9': 'participant_9',
+    'Participant 10': 'participant_10',
+    'Participant 11': 'participant_11',
+    'Participant 12': 'participant_12',
+    'Participant 13': 'participant_13',
+    'Participant 14': 'participant_14',
+    'Notes': 'notes'
+  };
+
+
   let currentUser = null;
   let currentProfile = null;
   let guides = [];
@@ -616,6 +685,8 @@
       if (error) return showError(`❌ ${error.message}`);
     }
 
+    await notifyGuideEvent(eventId, editingId ? 'updated' : 'created');
+
     resetForm();
     await loadAllData();
     renderAll();
@@ -932,6 +1003,7 @@
     return Object.values(row).some(value => String(value ?? '').trim() !== '');
   }
 
+
   async function importExcelFile(file) {
     if (!isAdmin()) {
       showImportReport('Import refusé : accès admin requis.', true);
@@ -943,14 +1015,38 @@
       return;
     }
 
-    showImportReport('Import en cours...');
+    showImportReport('Vérification du fichier Excel en cours...');
 
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
     const sheet = workbook.Sheets['Planning'] || workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' }).filter(rowHasData);
+    const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: '' }).filter(rowHasData);
+    const rows = rawRows.map(mapFrenchRowToTechnical).filter(row => !isExampleRow(row));
+
+    if (!rows.length) {
+      showImportReport('Aucune ligne à importer. Vérifie que la ligne exemple a été supprimée et que tu as ajouté au moins un événement.', true);
+      return;
+    }
+
+    const validations = rows.map((row, index) => validateImportRow(row, index + 2));
+    const invalidRows = validations.filter(item => item.errors.length);
+
+    if (invalidRows.length) {
+      const errorHtml = invalidRows.slice(0, 20).map(item => (
+        `<li><strong>Ligne ${item.rowNumber}</strong> : ${item.errors.map(escapeHtml).join(', ')}</li>`
+      )).join('');
+
+      showImportReport(
+        `❌ Import bloqué : <strong>${invalidRows.length}</strong> ligne(s) contiennent des erreurs.<ul class="validation-list">${errorHtml}</ul>${invalidRows.length > 20 ? '<br>Seules les 20 premières erreurs sont affichées.' : ''}`,
+        true
+      );
+      return;
+    }
+
+    showImportReport(`✅ Vérification réussie : ${rows.length} ligne(s) prêtes à être importées. Import en cours...`);
 
     let created = 0;
+    let notificationsSent = 0;
     const errors = [];
 
     for (let i = 0; i < rows.length; i++) {
@@ -963,12 +1059,6 @@
         const guideId = getGuideIdFromName(row.guide);
         const eventType = normalizeName(row.event_type);
         const giteId = await getOrCreatePlace(row.gite, 'gite');
-
-        if (!startDate || !endDate) throw new Error('date début ou date fin manquante/invalide');
-        if (endDate < startDate) throw new Error('date de fin avant date de début');
-        if (!guideId) throw new Error(`guide introuvable : ${row.guide}`);
-        if (!eventType) throw new Error('type d’événement manquant');
-        if (!giteId) throw new Error('gîte manquant');
 
         const { data: insertedEvent, error: eventError } = await db
           .from('events')
@@ -1021,6 +1111,9 @@
           if (mealsError) throw mealsError;
         }
 
+        const notificationOk = await notifyGuideEvent(eventId, 'created');
+        if (notificationOk) notificationsSent++;
+
         created++;
       } catch (error) {
         errors.push(`Ligne ${rowNumber} : ${escapeHtml(error.message || String(error))}`);
@@ -1032,142 +1125,11 @@
 
     const message = [
       `✅ Import terminé : <strong>${created}</strong> événement(s) créé(s).`,
-      errors.length ? `⚠️ Erreurs :<br>${errors.slice(0, 10).join('<br>')}${errors.length > 10 ? '<br>...' : ''}` : ''
+      `📧 Notifications envoyées : <strong>${notificationsSent}</strong>.`,
+      errors.length ? `⚠️ Erreurs après validation :<br>${errors.slice(0, 10).join('<br>')}${errors.length > 10 ? '<br>...' : ''}` : ''
     ].filter(Boolean).join('<br>');
 
     showImportReport(message, Boolean(errors.length && !created));
-  }
-
-
-
-  function sheetSafeName(name) {
-    return String(name || 'Sheet').substring(0, 31).replace(/[\\/*?:[\]]/g, '-');
-  }
-
-  function buildImportMatrixWorkbook() {
-    if (!window.XLSX) {
-      alert('Bibliothèque Excel non chargée. Recharge la page puis réessaie.');
-      return null;
-    }
-
-    const eventTypes = [
-      'Initiation enduro',
-      'Initiation trail',
-      'Enduro débutant',
-      'Enduro intermédiaire plus',
-      'Trail',
-      'Trail engagé',
-      'Quad',
-      'Enduro senior',
-      'Sortie pépère'
-    ];
-
-    const restaurants = places
-      .filter(place => place.kind === 'restaurant')
-      .map(place => place.name)
-      .sort((a, b) => a.localeCompare(b, 'fr'));
-
-    const gites = places
-      .filter(place => place.kind === 'gite')
-      .map(place => place.name)
-      .sort((a, b) => a.localeCompare(b, 'fr'));
-
-    const guideNames = guides
-      .map(guide => guide.name)
-      .sort((a, b) => a.localeCompare(b, 'fr'));
-
-    const headers = [
-      'start_date','end_date','guide','event_type',
-      'restaurant_day1_lunch','restaurant_day1_dinner',
-      'restaurant_day2_lunch','restaurant_day2_dinner',
-      'restaurant_day3_lunch','restaurant_day3_dinner',
-      'restaurant_day4_lunch','restaurant_day4_dinner',
-      'restaurant_day5_lunch','restaurant_day5_dinner',
-      'gite',
-      'participant_1','participant_2','participant_3','participant_4','participant_5','participant_6','participant_7',
-      'participant_8','participant_9','participant_10','participant_11','participant_12','participant_13','participant_14',
-      'notes'
-    ];
-
-    const example = [
-      '2026-05-01','2026-05-03',
-      guideNames[0] || 'Raphaël',
-      eventTypes[0],
-      restaurants[0] || '',
-      restaurants[1] || restaurants[0] || '',
-      restaurants[0] || '',
-      restaurants[1] || restaurants[0] || '',
-      restaurants[0] || '',
-      restaurants[1] || restaurants[0] || '',
-      '',
-      '',
-      '',
-      '',
-      gites[0] || '',
-      'Client 1','Client 2','','','','','','','','','','','','',
-      'Exemple : groupe homogène, prévoir repas terroir'
-    ];
-
-    const workbook = XLSX.utils.book_new();
-
-    const planningRows = [headers, example];
-    for (let i = 0; i < 48; i++) {
-      planningRows.push(new Array(headers.length).fill(''));
-    }
-
-    const planningSheet = XLSX.utils.aoa_to_sheet(planningRows);
-    planningSheet['!freeze'] = { xSplit: 0, ySplit: 1 };
-    planningSheet['!cols'] = headers.map(header => ({
-      wch: header.includes('participant') ? 16 : header.includes('restaurant') ? 24 : header === 'notes' ? 38 : 18
-    }));
-
-    XLSX.utils.book_append_sheet(workbook, planningSheet, 'Planning');
-
-    const maxRows = Math.max(guideNames.length, eventTypes.length, restaurants.length, gites.length, 1);
-    const listRows = [['Guides', 'TypesEvenements', 'Restaurants', 'Gites']];
-    for (let i = 0; i < maxRows; i++) {
-      listRows.push([
-        guideNames[i] || '',
-        eventTypes[i] || '',
-        restaurants[i] || '',
-        gites[i] || ''
-      ]);
-    }
-
-    const listSheet = XLSX.utils.aoa_to_sheet(listRows);
-    listSheet['!cols'] = [{ wch: 24 }, { wch: 30 }, { wch: 32 }, { wch: 32 }];
-    XLSX.utils.book_append_sheet(workbook, listSheet, 'Listes');
-
-    const helpRows = [
-      ['Mode d’emploi'],
-      ['1 ligne = 1 événement à importer dans le planning.'],
-      ['Les colonnes start_date et end_date doivent rester au format YYYY-MM-DD.'],
-      ['Le guide doit correspondre exactement à un guide existant dans Supabase.'],
-      ['Le gîte et les restaurants peuvent déjà exister ou être nouveaux : le site les créera à l’import si besoin.'],
-      ['restaurant_day1_lunch/dinner correspond au 1er jour de l’événement, day2 au 2e jour, etc.'],
-      ['L’import ajoute les événements : il ne supprime pas les événements existants.'],
-      ['Conseil : teste toujours avec 1 ou 2 lignes avant un gros import.']
-    ];
-    const helpSheet = XLSX.utils.aoa_to_sheet(helpRows);
-    helpSheet['!cols'] = [{ wch: 110 }];
-    XLSX.utils.book_append_sheet(workbook, helpSheet, 'Mode d’emploi');
-
-    return workbook;
-  }
-
-  function exportImportMatrix() {
-    if (!isAdmin()) {
-      alert('Export refusé : accès admin requis.');
-      return;
-    }
-
-    const workbook = buildImportMatrixWorkbook();
-    if (!workbook) return;
-
-    const today = new Date();
-    const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-
-    XLSX.writeFile(workbook, `matrice-import-planning-motoroadtrip-${stamp}.xlsx`);
   }
 
 

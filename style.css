@@ -633,3 +633,19 @@ textarea { resize: vertical; min-height: 68px; }
   border-color: #fecaca;
   color: #b42318;
 }
+
+
+.validation-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.validation-list li {
+  margin: 4px 0;
+}
+
+.import-report.success {
+  background: #ecfdf3;
+  border-color: #bbf7d0;
+  color: #047857;
+}
