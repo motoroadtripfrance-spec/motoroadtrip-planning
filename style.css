@@ -28,11 +28,14 @@
 body {
   margin: 0;
   font-family: Inter, Arial, Helvetica, sans-serif;
+
   background:
-    radial-gradient(circle at 18% 12%, rgba(56, 189, 248, 0.32), transparent 22%),
-    radial-gradient(circle at 84% 4%, rgba(250, 204, 21, 0.18), transparent 18%),
-    linear-gradient(145deg, rgba(7, 23, 47, 0.94), rgba(18, 52, 112, 0.78), rgba(226, 238, 255, 0.70)),
-    url("motoroadtrip-visual.jpg") center center / cover fixed no-repeat;
+    linear-gradient(
+      rgba(7, 23, 47, 0.65),
+      rgba(7, 23, 47, 0.85)
+    ),
+    url("background.jpg") center / cover no-repeat fixed;
+
   color: var(--text);
   min-height: 100vh;
 }
