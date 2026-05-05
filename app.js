@@ -1133,7 +1133,7 @@
     showImportReport('Vérification du fichier Excel en cours...');
 
     const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+    const workbook = XLSX.read(buffer, { type: 'array', cellDates: false });
     const sheet = workbook.Sheets['Planning'] || workbook.Sheets[workbook.SheetNames[0]];
     const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: '' }).filter(rowHasData);
     const rows = rawRows.map(mapFrenchRowToTechnical).filter(row => !isExampleRow(row));
