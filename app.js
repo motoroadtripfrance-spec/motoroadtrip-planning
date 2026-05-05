@@ -202,6 +202,34 @@
     byId('resetPasswordScreen').style.display = 'grid';
   }
 
+  async function sendPasswordResetEmail() {
+    const email = byId('loginEmail')?.value.trim();
+    const errorBox = byId('loginError');
+
+    if (errorBox) errorBox.textContent = '';
+
+    if (!email) {
+      if (errorBox) errorBox.textContent = 'Renseigne ton email, puis clique sur “Mot de passe oublié”.';
+      return;
+    }
+
+    const redirectTo = `${window.location.origin}${window.location.pathname}`;
+
+    const { error } = await db.auth.resetPasswordForEmail(email, {
+      redirectTo
+    });
+
+    if (error) {
+      if (errorBox) errorBox.textContent = error.message || 'Impossible d’envoyer le lien de réinitialisation.';
+      return;
+    }
+
+    if (errorBox) {
+      errorBox.className = 'login-error reset-success';
+      errorBox.textContent = 'Email envoyé. Vérifie ta boîte mail pour réinitialiser ton mot de passe.';
+    }
+  }
+
   async function updatePasswordFromRecovery() {
     const password = byId('newPasswordReset').value;
     const confirm = byId('confirmPasswordReset').value;
@@ -1267,6 +1295,7 @@
 
   function bindEvents() {
     byId('loginButton')?.addEventListener('click', login);
+    byId('forgotPasswordButton')?.addEventListener('click', sendPasswordResetEmail);
     byId('updatePasswordButton')?.addEventListener('click', updatePasswordFromRecovery);
     byId('loginPassword')?.addEventListener('keydown', event => {
       if (event.key === 'Enter') login();
