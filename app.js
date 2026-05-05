@@ -1039,6 +1039,138 @@
   }
 
 
+
+  function sheetSafeName(name) {
+    return String(name || 'Sheet').substring(0, 31).replace(/[\\/*?:[\]]/g, '-');
+  }
+
+  function buildImportMatrixWorkbook() {
+    if (!window.XLSX) {
+      alert('Bibliothèque Excel non chargée. Recharge la page puis réessaie.');
+      return null;
+    }
+
+    const eventTypes = [
+      'Initiation enduro',
+      'Initiation trail',
+      'Enduro débutant',
+      'Enduro intermédiaire plus',
+      'Trail',
+      'Trail engagé',
+      'Quad',
+      'Enduro senior',
+      'Sortie pépère'
+    ];
+
+    const restaurants = places
+      .filter(place => place.kind === 'restaurant')
+      .map(place => place.name)
+      .sort((a, b) => a.localeCompare(b, 'fr'));
+
+    const gites = places
+      .filter(place => place.kind === 'gite')
+      .map(place => place.name)
+      .sort((a, b) => a.localeCompare(b, 'fr'));
+
+    const guideNames = guides
+      .map(guide => guide.name)
+      .sort((a, b) => a.localeCompare(b, 'fr'));
+
+    const headers = [
+      'start_date','end_date','guide','event_type',
+      'restaurant_day1_lunch','restaurant_day1_dinner',
+      'restaurant_day2_lunch','restaurant_day2_dinner',
+      'restaurant_day3_lunch','restaurant_day3_dinner',
+      'restaurant_day4_lunch','restaurant_day4_dinner',
+      'restaurant_day5_lunch','restaurant_day5_dinner',
+      'gite',
+      'participant_1','participant_2','participant_3','participant_4','participant_5','participant_6','participant_7',
+      'participant_8','participant_9','participant_10','participant_11','participant_12','participant_13','participant_14',
+      'notes'
+    ];
+
+    const example = [
+      '2026-05-01','2026-05-03',
+      guideNames[0] || 'Raphaël',
+      eventTypes[0],
+      restaurants[0] || '',
+      restaurants[1] || restaurants[0] || '',
+      restaurants[0] || '',
+      restaurants[1] || restaurants[0] || '',
+      restaurants[0] || '',
+      restaurants[1] || restaurants[0] || '',
+      '',
+      '',
+      '',
+      '',
+      gites[0] || '',
+      'Client 1','Client 2','','','','','','','','','','','','',
+      'Exemple : groupe homogène, prévoir repas terroir'
+    ];
+
+    const workbook = XLSX.utils.book_new();
+
+    const planningRows = [headers, example];
+    for (let i = 0; i < 48; i++) {
+      planningRows.push(new Array(headers.length).fill(''));
+    }
+
+    const planningSheet = XLSX.utils.aoa_to_sheet(planningRows);
+    planningSheet['!freeze'] = { xSplit: 0, ySplit: 1 };
+    planningSheet['!cols'] = headers.map(header => ({
+      wch: header.includes('participant') ? 16 : header.includes('restaurant') ? 24 : header === 'notes' ? 38 : 18
+    }));
+
+    XLSX.utils.book_append_sheet(workbook, planningSheet, 'Planning');
+
+    const maxRows = Math.max(guideNames.length, eventTypes.length, restaurants.length, gites.length, 1);
+    const listRows = [['Guides', 'TypesEvenements', 'Restaurants', 'Gites']];
+    for (let i = 0; i < maxRows; i++) {
+      listRows.push([
+        guideNames[i] || '',
+        eventTypes[i] || '',
+        restaurants[i] || '',
+        gites[i] || ''
+      ]);
+    }
+
+    const listSheet = XLSX.utils.aoa_to_sheet(listRows);
+    listSheet['!cols'] = [{ wch: 24 }, { wch: 30 }, { wch: 32 }, { wch: 32 }];
+    XLSX.utils.book_append_sheet(workbook, listSheet, 'Listes');
+
+    const helpRows = [
+      ['Mode d’emploi'],
+      ['1 ligne = 1 événement à importer dans le planning.'],
+      ['Les colonnes start_date et end_date doivent rester au format YYYY-MM-DD.'],
+      ['Le guide doit correspondre exactement à un guide existant dans Supabase.'],
+      ['Le gîte et les restaurants peuvent déjà exister ou être nouveaux : le site les créera à l’import si besoin.'],
+      ['restaurant_day1_lunch/dinner correspond au 1er jour de l’événement, day2 au 2e jour, etc.'],
+      ['L’import ajoute les événements : il ne supprime pas les événements existants.'],
+      ['Conseil : teste toujours avec 1 ou 2 lignes avant un gros import.']
+    ];
+    const helpSheet = XLSX.utils.aoa_to_sheet(helpRows);
+    helpSheet['!cols'] = [{ wch: 110 }];
+    XLSX.utils.book_append_sheet(workbook, helpSheet, 'Mode d’emploi');
+
+    return workbook;
+  }
+
+  function exportImportMatrix() {
+    if (!isAdmin()) {
+      alert('Export refusé : accès admin requis.');
+      return;
+    }
+
+    const workbook = buildImportMatrixWorkbook();
+    if (!workbook) return;
+
+    const today = new Date();
+    const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    XLSX.writeFile(workbook, `matrice-import-planning-motoroadtrip-${stamp}.xlsx`);
+  }
+
+
   function bindEvents() {
     byId('loginButton').addEventListener('click', login);
     byId('updatePasswordButton').addEventListener('click', updatePasswordFromRecovery);
@@ -1051,6 +1183,7 @@
     byId('resetFormButton').addEventListener('click', resetForm);
     byId('printButton').addEventListener('click', () => window.print());
     byId('exportCsvButton').addEventListener('click', exportCsv);
+    byId('exportMatrixButton')?.addEventListener('click', exportImportMatrix);
     byId('importExcelButton')?.addEventListener('click', () => byId('excelImportInput').click());
     byId('excelImportInput')?.addEventListener('change', async (event) => {
       const file = event.target.files?.[0];
