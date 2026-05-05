@@ -649,3 +649,21 @@ textarea { resize: vertical; min-height: 68px; }
   border-color: #bbf7d0;
   color: #047857;
 }
+
+
+.forgot-password-row {
+  position: relative;
+  margin: 12px 0 0;
+  text-align: center;
+}
+
+.forgot-password-row a {
+  color: var(--blue-dark);
+  font-weight: 900;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.forgot-password-row a:hover {
+  text-decoration: underline;
+}
