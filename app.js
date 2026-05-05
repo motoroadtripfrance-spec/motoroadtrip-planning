@@ -60,7 +60,7 @@
     'Date de fin': 'end_date',
     'Guide': 'guide',
     'Type d’événement': 'event_type',
-    'Type d\\'événement': 'event_type',
+  
     'Restaurant jour 1 midi': 'restaurant_day1_lunch',
     'Restaurant jour 1 soir': 'restaurant_day1_dinner',
     'Restaurant jour 2 midi': 'restaurant_day2_lunch',
