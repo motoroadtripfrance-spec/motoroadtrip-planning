@@ -60,7 +60,6 @@
     'Date de fin': 'end_date',
     'Guide': 'guide',
     'Type d’événement': 'event_type',
-  
     'Restaurant jour 1 midi': 'restaurant_day1_lunch',
     'Restaurant jour 1 soir': 'restaurant_day1_dinner',
     'Restaurant jour 2 midi': 'restaurant_day2_lunch',
@@ -89,7 +88,6 @@
     'Participant 14': 'participant_14',
     'Notes': 'notes'
   };
-
 
   let currentUser = null;
   let currentProfile = null;
@@ -180,15 +178,10 @@
     return guides.find(g => g.id === id)?.name || '';
   }
 
-  function getGuideIdByName(name) {
-    return guides.find(g => g.name === name)?.id || '';
-  }
-
   function getPlaceNameById(id) {
     if (!id) return '';
     return places.find(p => p.id === id)?.name || '';
   }
-
 
   function hasRecoveryTokenInUrl() {
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
@@ -283,9 +276,7 @@
 
     currentUser = data.session.user;
 
-    if (isPasswordRecoveryMode) {
-      return;
-    }
+    if (isPasswordRecoveryMode) return;
 
     await loadCurrentProfile();
     await showApp();
@@ -299,7 +290,7 @@
       .single();
 
     if (error || !data) {
-      alert("Profil introuvable. Vérifie que le profil existe dans Supabase.");
+      alert('Profil introuvable. Vérifie que le profil existe dans Supabase.');
       await logout();
       return;
     }
@@ -336,11 +327,7 @@
   async function loadAllData() {
     byId('loadingMessage').style.display = '';
 
-    const [
-      guidesResult,
-      placesResult,
-      eventsResult
-    ] = await Promise.all([
+    const [guidesResult, placesResult, eventsResult] = await Promise.all([
       db.from('guides').select('*').order('name', { ascending: true }),
       db.from('places').select('*').order('kind', { ascending: true }).order('name', { ascending: true }),
       db.from('events').select('*').order('start_date', { ascending: true })
@@ -448,7 +435,7 @@
 
   function buildParticipantInputs() {
     const container = byId('participantInputs');
-    if (container.children.length) return;
+    if (!container || container.children.length) return;
 
     for (let i = 1; i <= 14; i++) {
       const input = document.createElement('input');
@@ -649,10 +636,7 @@
       giteId: payload.gite_place_id
     });
 
-    if (validationMessage) {
-      showError(validationMessage);
-      return;
-    }
+    if (validationMessage) return showError(validationMessage);
 
     let eventId = editingId;
 
@@ -703,7 +687,10 @@
     byId('gite').value = '';
     byId('notes').value = '';
 
-    for (let i = 1; i <= 14; i++) byId(`participant${i}`).value = '';
+    for (let i = 1; i <= 14; i++) {
+      const input = byId(`participant${i}`);
+      if (input) input.value = '';
+    }
 
     renderMealPlanning();
   }
@@ -767,7 +754,7 @@
     if (!confirm('Supprimer ce lieu ?')) return;
 
     const { error } = await db.from('places').delete().eq('id', id);
-    if (error) return alert("Impossible de supprimer : ce lieu est peut-être déjà utilisé.");
+    if (error) return alert('Impossible de supprimer : ce lieu est peut-être déjà utilisé.');
 
     await loadAllData();
     renderAll();
@@ -929,13 +916,10 @@
     URL.revokeObjectURL(url);
   }
 
-
   function normalizeExcelDate(value) {
     if (!value) return '';
 
-    if (value instanceof Date) {
-      return toLocalDateString(value);
-    }
+    if (value instanceof Date) return toLocalDateString(value);
 
     if (typeof value === 'number' && window.XLSX) {
       const parsed = XLSX.SSF.parse_date_code(value);
@@ -944,7 +928,6 @@
     }
 
     const text = String(value).trim();
-
     if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
 
     const frMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
@@ -1003,6 +986,99 @@
     return Object.values(row).some(value => String(value ?? '').trim() !== '');
   }
 
+  function mapFrenchRowToTechnical(row) {
+    const mapped = {};
+
+    Object.entries(row).forEach(([key, value]) => {
+      const cleanKey = String(key).trim();
+      const technicalKey = frenchToTechnicalHeaders[cleanKey];
+      if (technicalKey) mapped[technicalKey] = value;
+    });
+
+    return mapped;
+  }
+
+  function isExampleRow(row) {
+    return String(row.notes || '').toLowerCase().includes('exemple à supprimer');
+  }
+
+  function validateImportRow(row, rowNumber) {
+    const errors = [];
+    const startDate = normalizeExcelDate(row.start_date);
+    const endDate = normalizeExcelDate(row.end_date);
+    const guideId = getGuideIdFromName(row.guide);
+    const eventType = normalizeName(row.event_type);
+    const gite = normalizeName(row.gite);
+
+    if (!startDate) errors.push('date de début invalide ou absente');
+    if (!endDate) errors.push('date de fin invalide ou absente');
+    if (startDate && endDate && endDate < startDate) errors.push('date de fin avant date de début');
+    if (!guideId) errors.push(`guide introuvable : ${normalizeName(row.guide) || 'vide'}`);
+    if (!eventType) errors.push('type d’événement absent');
+    if (eventType && !defaultEventTypes.includes(eventType)) errors.push(`type d’événement non reconnu : ${eventType}`);
+    if (!gite) errors.push('gîte absent');
+
+    return { rowNumber, errors };
+  }
+
+  function downloadExcelMatrix() {
+    if (!window.XLSX) {
+      showImportReport('Bibliothèque Excel non chargée. Recharge la page puis réessaie.', true);
+      return;
+    }
+
+    const restaurants = places.filter(p => p.kind === 'restaurant');
+    const gites = places.filter(p => p.kind === 'gite');
+
+    const planningRows = [
+      frenchImportHeaders,
+      [
+        '2026-05-01',
+        '2026-05-03',
+        guides[0]?.name || '',
+        defaultEventTypes[0],
+        restaurants[0]?.name || '',
+        restaurants[0]?.name || '',
+        restaurants[0]?.name || '',
+        restaurants[0]?.name || '',
+        restaurants[0]?.name || '',
+        restaurants[0]?.name || '',
+        '',
+        '',
+        '',
+        '',
+        gites[0]?.name || '',
+        'Jean Dupont',
+        'Paul Martin',
+        '', '', '', '', '', '', '', '', '', '', '', '',
+        'Exemple à supprimer avant import'
+      ]
+    ];
+
+    const listesRows = [['Guides', 'Types d’événement', 'Restaurants', 'Gîtes']];
+
+    const maxRows = Math.max(guides.length, defaultEventTypes.length, restaurants.length, gites.length, 20);
+
+    for (let i = 0; i < maxRows; i++) {
+      listesRows.push([
+        guides[i]?.name || '',
+        defaultEventTypes[i] || '',
+        restaurants[i]?.name || '',
+        gites[i]?.name || ''
+      ]);
+    }
+
+    const workbook = XLSX.utils.book_new();
+    const planningSheet = XLSX.utils.aoa_to_sheet(planningRows);
+    const listesSheet = XLSX.utils.aoa_to_sheet(listesRows);
+
+    planningSheet['!cols'] = frenchImportHeaders.map(() => ({ wch: 26 }));
+    listesSheet['!cols'] = [{ wch: 28 }, { wch: 32 }, { wch: 32 }, { wch: 32 }];
+
+    XLSX.utils.book_append_sheet(workbook, planningSheet, 'Planning');
+    XLSX.utils.book_append_sheet(workbook, listesSheet, 'Listes');
+    XLSX.writeFile(workbook, 'matrice-import-planning-motoroadtrip.xlsx');
+  }
 
   async function importExcelFile(file) {
     if (!isAdmin()) {
@@ -1088,7 +1164,7 @@
           if (participantError) throw participantError;
         }
 
-        const mealDates = getDatesBetween(startDate, endDate);
+        const mealDates = getDatesBetween(startDate, endDate).slice(0, 5);
         const meals = [];
 
         for (let day = 1; day <= mealDates.length; day++) {
@@ -1132,35 +1208,63 @@
     showImportReport(message, Boolean(errors.length && !created));
   }
 
+  async function notifyGuideEvent(eventId, action) {
+    try {
+      const { error } = await db.functions.invoke('notify-guide-event', {
+        body: { event_id: eventId, action }
+      });
+
+      if (error) {
+        console.warn('Notification guide non envoyée :', error.message || error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.warn('Notification guide ignorée :', error.message || error);
+      return false;
+    }
+  }
 
   function bindEvents() {
-    byId('loginButton').addEventListener('click', login);
-    byId('updatePasswordButton').addEventListener('click', updatePasswordFromRecovery);
-    byId('loginPassword').addEventListener('keydown', event => {
+    byId('loginButton')?.addEventListener('click', login);
+    byId('updatePasswordButton')?.addEventListener('click', updatePasswordFromRecovery);
+    byId('loginPassword')?.addEventListener('keydown', event => {
       if (event.key === 'Enter') login();
     });
 
-    byId('logoutButton').addEventListener('click', logout);
-    byId('saveEventButton').addEventListener('click', saveEvent);
-    byId('resetFormButton').addEventListener('click', resetForm);
-    byId('printButton').addEventListener('click', () => window.print());
-    byId('exportCsvButton').addEventListener('click', exportCsv);
-    byId('exportMatrixButton')?.addEventListener('click', exportImportMatrix);
-    byId('importExcelButton')?.addEventListener('click', () => byId('excelImportInput').click());
+    byId('logoutButton')?.addEventListener('click', logout);
+    byId('saveEventButton')?.addEventListener('click', saveEvent);
+    byId('resetFormButton')?.addEventListener('click', resetForm);
+    byId('printButton')?.addEventListener('click', () => window.print());
+    byId('exportCsvButton')?.addEventListener('click', exportCsv);
+
+    byId('exportMatrixButton')?.addEventListener('click', downloadExcelMatrix);
+
+    byId('importExcelButton')?.addEventListener('click', () => {
+      const input = byId('excelImportInput');
+      if (!input) {
+        showImportReport('Input Excel introuvable : vérifie id="excelImportInput" dans le HTML.', true);
+        return;
+      }
+      input.click();
+    });
+
     byId('excelImportInput')?.addEventListener('change', async (event) => {
       const file = event.target.files?.[0];
       if (!file) return;
       await importExcelFile(file);
       event.target.value = '';
     });
-    byId('createGuideAccountButton').addEventListener('click', createGuideAccount);
+
+    byId('createGuideAccountButton')?.addEventListener('click', createGuideAccount);
 
     ['filterGuide', 'filterType', 'filterStart', 'filterEnd'].forEach(id => {
-      byId(id).addEventListener('change', renderEvents);
+      byId(id)?.addEventListener('change', renderEvents);
     });
 
-    byId('startDate').addEventListener('change', () => renderMealPlanning(collectMeals()));
-    byId('endDate').addEventListener('change', () => renderMealPlanning(collectMeals()));
+    byId('startDate')?.addEventListener('change', () => renderMealPlanning(collectMeals()));
+    byId('endDate')?.addEventListener('change', () => renderMealPlanning(collectMeals()));
 
     document.addEventListener('click', event => {
       const button = event.target.closest('[data-action]');
