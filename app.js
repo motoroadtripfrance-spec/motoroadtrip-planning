@@ -1055,8 +1055,12 @@
       ]
     ];
 
-    const listesRows = [['Guides', 'Types d’événement', 'Restaurants', 'Gîtes']];
+    // On crée des lignes vides pour faciliter la saisie directe dans Excel.
+    for (let i = 0; i < 200; i++) {
+      planningRows.push(new Array(frenchImportHeaders.length).fill(''));
+    }
 
+    const listesRows = [['Guides', 'Types d’événement', 'Restaurants', 'Gîtes']];
     const maxRows = Math.max(guides.length, defaultEventTypes.length, restaurants.length, gites.length, 20);
 
     for (let i = 0; i < maxRows; i++) {
@@ -1074,6 +1078,41 @@
 
     planningSheet['!cols'] = frenchImportHeaders.map(() => ({ wch: 26 }));
     listesSheet['!cols'] = [{ wch: 28 }, { wch: 32 }, { wch: 32 }, { wch: 32 }];
+
+    // Menus déroulants Excel.
+    // Attention : cette option fonctionne selon les versions d'Excel/LibreOffice et selon le support SheetJS côté navigateur.
+    const lastPlanningRow = 202;
+    const lastGuideRow = Math.max(guides.length + 1, 2);
+    const lastTypeRow = Math.max(defaultEventTypes.length + 1, 2);
+    const lastRestaurantRow = Math.max(restaurants.length + 1, 2);
+    const lastGiteRow = Math.max(gites.length + 1, 2);
+
+    planningSheet['!dataValidation'] = [
+      {
+        sqref: `C2:C${lastPlanningRow}`,
+        type: 'list',
+        allowBlank: false,
+        formulas: [`Listes!$A$2:$A$${lastGuideRow}`]
+      },
+      {
+        sqref: `D2:D${lastPlanningRow}`,
+        type: 'list',
+        allowBlank: false,
+        formulas: [`Listes!$B$2:$B$${lastTypeRow}`]
+      },
+      {
+        sqref: `E2:N${lastPlanningRow}`,
+        type: 'list',
+        allowBlank: true,
+        formulas: [`Listes!$C$2:$C$${lastRestaurantRow}`]
+      },
+      {
+        sqref: `O2:O${lastPlanningRow}`,
+        type: 'list',
+        allowBlank: false,
+        formulas: [`Listes!$D$2:$D$${lastGiteRow}`]
+      }
+    ];
 
     XLSX.utils.book_append_sheet(workbook, planningSheet, 'Planning');
     XLSX.utils.book_append_sheet(workbook, listesSheet, 'Listes');
