@@ -614,3 +614,22 @@ textarea { resize: vertical; min-height: 68px; }
   color: #047857 !important;
   font-weight: 900;
 }
+
+
+.import-report {
+  margin: 12px 0 18px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(224,242,254,0.92);
+  border: 1px solid #bae6fd;
+  color: var(--blue-dark);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.import-report.error {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b42318;
+}

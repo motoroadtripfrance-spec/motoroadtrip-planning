@@ -169,6 +169,8 @@
             <div class="toolbar">
               <button id="printButton" class="btn btn-secondary btn-small" type="button">Imprimer</button>
               <button id="exportCsvButton" class="btn btn-secondary btn-small" type="button">Export Excel CSV</button>
+              <button id="importExcelButton" class="btn btn-secondary btn-small admin-only" type="button">Importer Excel</button>
+              <input id="excelImportInput" type="file" accept=".xlsx,.xls" style="display:none;" />
             </div>
           </div>
 
@@ -206,7 +208,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js"></script>
+  <script src="config.example.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

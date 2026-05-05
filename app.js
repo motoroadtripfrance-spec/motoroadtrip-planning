@@ -858,6 +858,187 @@
     URL.revokeObjectURL(url);
   }
 
+
+  function normalizeExcelDate(value) {
+    if (!value) return '';
+
+    if (value instanceof Date) {
+      return toLocalDateString(value);
+    }
+
+    if (typeof value === 'number' && window.XLSX) {
+      const parsed = XLSX.SSF.parse_date_code(value);
+      if (!parsed) return '';
+      return `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`;
+    }
+
+    const text = String(value).trim();
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+
+    const frMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (frMatch) {
+      const [, day, month, year] = frMatch;
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+
+    return '';
+  }
+
+  function normalizeName(value) {
+    return String(value || '').trim();
+  }
+
+  function showImportReport(message, isError = false) {
+    let report = byId('importReport');
+
+    if (!report) {
+      report = document.createElement('div');
+      report.id = 'importReport';
+      report.className = 'import-report';
+      byId('loadingMessage').insertAdjacentElement('beforebegin', report);
+    }
+
+    report.className = isError ? 'import-report error' : 'import-report';
+    report.innerHTML = message;
+  }
+
+  async function getOrCreatePlace(name, kind) {
+    const cleanName = normalizeName(name);
+    if (!cleanName || cleanName === '—' || cleanName === '-') return null;
+
+    const existing = places.find(place => place.kind === kind && place.name.toLowerCase() === cleanName.toLowerCase());
+    if (existing) return existing.id;
+
+    const { data, error } = await db
+      .from('places')
+      .insert({ name: cleanName, kind })
+      .select('id, name, kind')
+      .single();
+
+    if (error) throw error;
+
+    places.push(data);
+    return data.id;
+  }
+
+  function getGuideIdFromName(name) {
+    const cleanName = normalizeName(name);
+    const guide = guides.find(g => g.name.toLowerCase() === cleanName.toLowerCase());
+    return guide?.id || null;
+  }
+
+  function rowHasData(row) {
+    return Object.values(row).some(value => String(value ?? '').trim() !== '');
+  }
+
+  async function importExcelFile(file) {
+    if (!isAdmin()) {
+      showImportReport('Import refusé : accès admin requis.', true);
+      return;
+    }
+
+    if (!window.XLSX) {
+      showImportReport('Bibliothèque Excel non chargée. Recharge la page puis réessaie.', true);
+      return;
+    }
+
+    showImportReport('Import en cours...');
+
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+    const sheet = workbook.Sheets['Planning'] || workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' }).filter(rowHasData);
+
+    let created = 0;
+    const errors = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const rowNumber = i + 2;
+      const row = rows[i];
+
+      try {
+        const startDate = normalizeExcelDate(row.start_date);
+        const endDate = normalizeExcelDate(row.end_date);
+        const guideId = getGuideIdFromName(row.guide);
+        const eventType = normalizeName(row.event_type);
+        const giteId = await getOrCreatePlace(row.gite, 'gite');
+
+        if (!startDate || !endDate) throw new Error('date début ou date fin manquante/invalide');
+        if (endDate < startDate) throw new Error('date de fin avant date de début');
+        if (!guideId) throw new Error(`guide introuvable : ${row.guide}`);
+        if (!eventType) throw new Error('type d’événement manquant');
+        if (!giteId) throw new Error('gîte manquant');
+
+        const { data: insertedEvent, error: eventError } = await db
+          .from('events')
+          .insert({
+            start_date: startDate,
+            end_date: endDate,
+            guide_id: guideId,
+            event_type: eventType,
+            gite_place_id: giteId,
+            notes: normalizeName(row.notes)
+          })
+          .select('id')
+          .single();
+
+        if (eventError) throw eventError;
+
+        const eventId = insertedEvent.id;
+
+        const participants = [];
+        for (let p = 1; p <= 14; p++) {
+          const participant = normalizeName(row[`participant_${p}`]);
+          if (participant) participants.push({ event_id: eventId, name: participant });
+        }
+
+        if (participants.length) {
+          const { error: participantError } = await db.from('participants').insert(participants);
+          if (participantError) throw participantError;
+        }
+
+        const mealDates = getDatesBetween(startDate, endDate);
+        const meals = [];
+
+        for (let day = 1; day <= mealDates.length; day++) {
+          const lunchName = row[`restaurant_day${day}_lunch`];
+          const dinnerName = row[`restaurant_day${day}_dinner`];
+
+          const lunchPlaceId = await getOrCreatePlace(lunchName, 'restaurant');
+          const dinnerPlaceId = await getOrCreatePlace(dinnerName, 'restaurant');
+
+          meals.push({
+            event_id: eventId,
+            meal_date: mealDates[day - 1],
+            lunch_place_id: lunchPlaceId,
+            dinner_place_id: dinnerPlaceId
+          });
+        }
+
+        if (meals.length) {
+          const { error: mealsError } = await db.from('event_meals').insert(meals);
+          if (mealsError) throw mealsError;
+        }
+
+        created++;
+      } catch (error) {
+        errors.push(`Ligne ${rowNumber} : ${escapeHtml(error.message || String(error))}`);
+      }
+    }
+
+    await loadAllData();
+    renderAll();
+
+    const message = [
+      `✅ Import terminé : <strong>${created}</strong> événement(s) créé(s).`,
+      errors.length ? `⚠️ Erreurs :<br>${errors.slice(0, 10).join('<br>')}${errors.length > 10 ? '<br>...' : ''}` : ''
+    ].filter(Boolean).join('<br>');
+
+    showImportReport(message, Boolean(errors.length && !created));
+  }
+
+
   function bindEvents() {
     byId('loginButton').addEventListener('click', login);
     byId('updatePasswordButton').addEventListener('click', updatePasswordFromRecovery);
@@ -870,6 +1051,13 @@
     byId('resetFormButton').addEventListener('click', resetForm);
     byId('printButton').addEventListener('click', () => window.print());
     byId('exportCsvButton').addEventListener('click', exportCsv);
+    byId('importExcelButton')?.addEventListener('click', () => byId('excelImportInput').click());
+    byId('excelImportInput')?.addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      await importExcelFile(file);
+      event.target.value = '';
+    });
     byId('createGuideAccountButton').addEventListener('click', createGuideAccount);
 
     ['filterGuide', 'filterType', 'filterStart', 'filterEnd'].forEach(id => {
